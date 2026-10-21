@@ -1,0 +1,30 @@
+# weights / trainer dumps
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+*.gguf
+**/checkpoint-*/
+**/runs/
+**/wandb/
+**/hf/
+
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+hf_token
+.huggingface/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# local paper dump (read from arxiv)
+*.pdf
+
+# os
+.DS_Store
