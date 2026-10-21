@@ -26,5 +26,6 @@ __pycache__/
 # local paper dump (read from arxiv)
 *.pdf
 
-# os
+# os / notebooks
 .DS_Store
+*.ipynb

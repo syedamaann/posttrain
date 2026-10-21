@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""README figures from p1_sft/results_v4.jsonl + the Natalia greedy transcripts."""
+"""Write s1/card/{protocol,metrics,sweep}.png from s1/results.jsonl."""
 from __future__ import annotations
 
 import json
@@ -12,9 +12,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
 HERE = Path(__file__).resolve().parent
+CARD = HERE / "card"
 ROWS = [
     json.loads(l)
-    for l in (HERE.parent / "p1_sft" / "results_v4.jsonl").read_text().splitlines()
+    for l in (HERE / "results.jsonl").read_text().splitlines()
     if l.strip()
 ]
 
@@ -173,7 +174,7 @@ def protocol():
         fontsize=7.5,
         color=MUTED,
     )
-    fig.savefig(HERE / "protocol.png", dpi=180)
+    fig.savefig(CARD / "protocol.png", dpi=180)
     plt.close(fig)
 
 
@@ -242,7 +243,7 @@ def metrics():
     for i, (_, bv, sv) in enumerate(pairs):
         ax.text(i - w / 2, bv + 2, f"{bv:.0f}", ha="center", va="bottom", fontsize=7.5, color=MUTED)
         ax.text(i + w / 2, sv + 2, f"{sv:.0f}", ha="center", va="bottom", fontsize=7.5, color=INK)
-    fig.savefig(HERE / "metrics.png", dpi=180)
+    fig.savefig(CARD / "metrics.png", dpi=180)
     plt.close(fig)
 
 
@@ -285,7 +286,7 @@ def sweep():
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-    fig.savefig(HERE / "sweep.png", dpi=180)
+    fig.savefig(CARD / "sweep.png", dpi=180)
     plt.close(fig)
 
 
@@ -294,4 +295,4 @@ if __name__ == "__main__":
     metrics()
     sweep()
     for name in ("protocol.png", "metrics.png", "sweep.png"):
-        print("wrote", HERE / name, (HERE / name).stat().st_size, "bytes")
+        print("wrote", CARD / name, (CARD / name).stat().st_size, "bytes")

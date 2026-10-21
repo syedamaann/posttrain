@@ -1,4 +1,4 @@
-"""S1-v4 SFT: batch_rebalance + control-token embedding init. Ship checkpoint-300."""
+"""S1 SFT: batch_rebalance + control-token embedding init. Official weights = checkpoint-300."""
 import json
 import os
 

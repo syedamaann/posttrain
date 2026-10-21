@@ -70,7 +70,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=MODEL_ID)
     p.add_argument("--subfolder", default=None)
-    p.add_argument("--out", default="p1_sft/results_v4.jsonl")
+    p.add_argument("--out", default="s1/results.jsonl")
     args = p.parse_args()
     tok = AutoTokenizer.from_pretrained(args.model, subfolder=args.subfolder)
     tok.eos_token = "<|im_end|>"
