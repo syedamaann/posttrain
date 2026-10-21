@@ -14,11 +14,13 @@ assert (root / "model.safetensors").exists() or list(root.glob("*.safetensors"))
 
 create_repo(DST, private=True, exist_ok=True, repo_type="model")
 api = HfApi()
-api.upload_folder(folder_path=str(root), repo_id=DST, repo_type="model")
-api.upload_file(path_or_fileobj=str(HERE / "README.md"), path_in_repo="README.md", repo_id=DST)
-api.upload_file(
-    path_or_fileobj=str(HERE / "generation_config.json"),
-    path_in_repo="generation_config.json",
+api.upload_folder(
+    folder_path=str(root),
     repo_id=DST,
+    repo_type="model",
+    ignore_patterns=["optimizer.pt", "scheduler.pt", "rng_state.pth"],
 )
+for p in sorted(HERE.iterdir()):
+    if p.suffix.lower() in {".md", ".json", ".png"}:
+        api.upload_file(path_or_fileobj=str(p), path_in_repo=p.name, repo_id=DST)
 print("shipped", f"https://huggingface.co/{DST}")
