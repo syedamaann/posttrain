@@ -76,6 +76,9 @@ def main():
         model=S1, args=args, train_dataset=ds, reward_funcs=math_r, processing_class=tok,
     )
     trainer.train()
+    tok.save_pretrained(OUT)
+    for ckpt in Path(OUT).glob("checkpoint-*"):
+        tok.save_pretrained(ckpt)
     log_path = Path(OUT) / "log_history.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     json.dump(trainer.state.log_history, open(log_path, "w"))

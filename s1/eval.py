@@ -72,10 +72,11 @@ def main():
     p.add_argument("--subfolder", default=None)
     p.add_argument("--out", default="s1/results.jsonl")
     args = p.parse_args()
-    tok = AutoTokenizer.from_pretrained(args.model, subfolder=args.subfolder)
+    load_kw = {"subfolder": args.subfolder} if args.subfolder else {}
+    tok = AutoTokenizer.from_pretrained(args.model, **load_kw)
     tok.eos_token = "<|im_end|>"
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, subfolder=args.subfolder, dtype=torch.bfloat16, device_map="cuda",
+        args.model, dtype=torch.bfloat16, device_map="cuda", **load_kw,
     ).eval()
     sets = load_sets()
     for set_name, items in sets.items():
