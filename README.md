@@ -5,7 +5,7 @@ Small-scale [Rufus-Air](https://arxiv.org/abs/2609.29421) replica on `Qwen/Qwen3
 | Stage | Status | Artifact |
 |---|---|---|
 | **S1 SFT** | done | [`syedamaan/qwen3-1.7b-rufus-s1`](https://huggingface.co/syedamaan/qwen3-1.7b-rufus-s1) is **checkpoint-300**. Do not load [`…-sft-v4-ckpts`](https://huggingface.co/syedamaan/qwen3-1.7b-rufus-s1-sft-v4-ckpts) at repo root (that is 422). |
-| S2 reasoning RL | next | beat S1 with `s1/eval.py` |
+| S2 reasoning RL | smoke done, short run next | beat S1 with `s1/eval.py`; do not push Hub until the win table holds |
 
 ```
 s1/train.py          SFT recipe
@@ -13,6 +13,8 @@ s1/eval.py           frozen n=100 GSM8K + MATH-500
 s1/results.jsonl     A40 sweep (base … @400)
 s1/make_figures.py   regenerates card PNGs
 s1/card/             Hub README + figures + ship.py
+s2/reward.py         Math-Verify + DAPO (0, 0.8] + length vs shortest correct
+s2/train.py          GSPO, KL=0, vLLM colocate, GSM8K train
 ```
 
 ```python
