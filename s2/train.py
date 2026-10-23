@@ -16,11 +16,12 @@ from trl import GRPOConfig, GRPOTrainer
 sys.path.insert(0, str(Path(__file__).parent))
 from reward import closed_verify, shape_group, think_body
 
-S1 = "syedamaan/qwen3-1.7b-rufus-s1"
+START = "/workspace/s2-gspo-close-200/checkpoint-200"
 SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 G = 8
 MAX_NEW = 1024
-OUT = "/workspace/s2-gspo-close"
+MAX_STEPS = 1000
+OUT = "/workspace/s2-gspo-acc-1000"
 
 
 def gsm8k_gold(ex):
@@ -28,7 +29,7 @@ def gsm8k_gold(ex):
 
 
 def main():
-    tok = AutoTokenizer.from_pretrained(S1)
+    tok = AutoTokenizer.from_pretrained(START)
     tok.eos_token = "<|im_end|>"
     tok.pad_token = "<|endoftext|>"
 
@@ -60,21 +61,22 @@ def main():
 
     wandb.finish()
     args = GRPOConfig(
-        output_dir=OUT, run_name="s2-gspo-close-qwen3-1.7b",
-        max_steps=20, per_device_train_batch_size=G, num_generations=G,
+        output_dir=OUT, run_name="s2-gspo-acc-1000",
+        max_steps=MAX_STEPS, per_device_train_batch_size=G, num_generations=G,
         max_completion_length=MAX_NEW, learning_rate=1e-6,
         weight_decay=0.1, adam_beta1=0.9, adam_beta2=0.98, max_grad_norm=1.0,
         bf16=True, gradient_checkpointing=True,
         importance_sampling_level="sequence", loss_type="grpo", beta=0.0,
         use_vllm=True, vllm_mode="colocate", vllm_gpu_memory_utilization=0.3,
         temperature=1.0, top_p=0.95, top_k=20,
-        logging_steps=1, save_strategy="steps", save_steps=10, save_only_model=True,
+        logging_steps=1, save_strategy="steps", save_steps=500, save_total_limit=2,
+        save_only_model=True,
         report_to="wandb", remove_unused_columns=False, seed=0,
         mask_truncated_completions=True,
     )
     assert torch.cuda.memory_allocated() == 0, "GPU not empty: restart kernel"
     trainer = GRPOTrainer(
-        model=S1, args=args, train_dataset=ds, reward_funcs=math_r, processing_class=tok,
+        model=START, args=args, train_dataset=ds, reward_funcs=math_r, processing_class=tok,
     )
     trainer.train()
     tok.save_pretrained(OUT)
@@ -84,8 +86,8 @@ def main():
     log_path.parent.mkdir(parents=True, exist_ok=True)
     json.dump(trainer.state.log_history, open(log_path, "w"))
     print("wrote", log_path)
-    ckpt = f"{OUT}/checkpoint-20"
-    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-close.jsonl")
+    ckpt = f"{OUT}/checkpoint-{MAX_STEPS}"
+    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-acc-1000.jsonl")
 
 
 if __name__ == "__main__":
