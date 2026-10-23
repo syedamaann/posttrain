@@ -3,7 +3,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from reward import closed_verify, dapo_keep, overlong_penalize, shape_group, think_answer
+from reward import (
+    closed_verify, dapo_keep, nothink_verify, overlong_penalize, shape_group, think_answer,
+)
 
 
 def test_dapo_drops_all_fail_and_all_pass():
@@ -101,6 +103,44 @@ def test_janet_group_pays_a_finished_proof():
     assert abs(shaped[7] - (1024 - 786) / 256) < 1e-9
 
 
+def test_nothink_duplicate_with_close_tag_scores_zero():
+    """checkpoint-1000 item 0: answer, stray </think>, same answer again."""
+    text = "Janet sells 9 eggs.\n\\boxed{18}\n</think>\nJanet sells 9 eggs.\n\\boxed{18}"
+    assert nothink_verify(text, "18", lambda gold, span: True) == 0.0
+
+
+def test_nothink_open_tag_scores_zero():
+    text = "<think>\nJanet sells 9 eggs.\n\\boxed{18}"
+    assert nothink_verify(text, "18", lambda gold, span: True) == 0.0
+
+
+def test_nothink_clean_box_scores_one():
+    text = "Janet sells 9 eggs.\n\\boxed{18}"
+    assert nothink_verify(text, "18", lambda gold, span: True) == 1.0
+
+
+def test_nothink_wrong_box_scores_zero():
+    text = "Janet sells 9 eggs.\n\\boxed{2}"
+    assert nothink_verify(text, "18", lambda gold, span: False) == 0.0
+
+
+def test_nothink_bare_number_scores_zero():
+    assert nothink_verify("18", "18", lambda gold, span: True) == 0.0
+
+
+def test_nothink_group_pays_the_single_copy():
+    """Five clean proofs and three duplicated ones. Only the clean copies are paid."""
+    clean = "Janet sells 9 eggs.\n\\boxed{18}"
+    leaked = "Janet sells 9 eggs.\n\\boxed{18}\n</think>\nJanet sells 9 eggs.\n\\boxed{18}"
+    rows = [(80, clean), (146, clean), (196, clean), (117, clean), (279, clean), (259, leaked), (462, leaked), (379, leaked)]
+    verify = lambda gold, span: True
+    binary = [nothink_verify(text, "18", verify) for _, text in rows]
+    shaped = shape_group(binary, [n for n, _ in rows], max_len=1024)
+    assert binary == [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+    assert shaped[:5] == [1.0, 1.0, 1.0, 1.0, 1.0]
+    assert shaped[5:] == [0.0, 0.0, 0.0]
+
+
 if __name__ == "__main__":
     test_dapo_drops_all_fail_and_all_pass()
     test_dapo_keeps_open_interval()
@@ -116,4 +156,10 @@ if __name__ == "__main__":
     test_think_body_floor_is_128_tokens()
     test_bare_number_after_close_scores_zero()
     test_janet_group_pays_a_finished_proof()
+    test_nothink_duplicate_with_close_tag_scores_zero()
+    test_nothink_open_tag_scores_zero()
+    test_nothink_clean_box_scores_one()
+    test_nothink_wrong_box_scores_zero()
+    test_nothink_bare_number_scores_zero()
+    test_nothink_group_pays_the_single_copy()
     print("ok")

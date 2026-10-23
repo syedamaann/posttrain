@@ -1,4 +1,4 @@
-"""S2 reasoning RL: GSPO + closed boxed reward + DAPO + overlong penalty. KL=0."""
+"""S2 reasoning RL: GSPO, think reward unchanged, no-think pays one boxed answer. KL=0."""
 import json
 import os
 import sys
@@ -14,14 +14,14 @@ from transformers import AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
 sys.path.insert(0, str(Path(__file__).parent))
-from reward import closed_verify, shape_group, think_body
+from reward import closed_verify, nothink_verify, shape_group, think_body
 
-START = "/workspace/s2-gspo-close-200/checkpoint-200"
+START = "/workspace/s2-gspo-acc-1000/checkpoint-1000"
 SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 G = 8
 MAX_NEW = 1024
-MAX_STEPS = 1000
-OUT = "/workspace/s2-gspo-acc-1000"
+MAX_STEPS = 200
+OUT = "/workspace/s2-gspo-nothink-200"
 
 
 def gsm8k_gold(ex):
@@ -35,33 +35,60 @@ def main():
 
     raw = load_dataset("openai/gsm8k", "main", split="train")
 
-    def row(ex):
+    def row(ex, idx):
+        mode = "think" if idx % 2 == 0 else "nothink"
         prompt = tok.apply_chat_template(
             [{"role": "user", "content": ex["question"] + SUFFIX}],
-            tokenize=False, add_generation_prompt=True, enable_thinking=True,
+            tokenize=False, add_generation_prompt=True, enable_thinking=(mode == "think"),
         )
-        return {"prompt": prompt, "answer": gsm8k_gold(ex)}
+        return {"prompt": prompt, "answer": gsm8k_gold(ex), "mode": mode}
 
-    ds = raw.map(row, remove_columns=raw.column_names)
+    ds = raw.map(row, with_indices=True, remove_columns=raw.column_names)
 
     def verify_span(gold, span):
         return verify(parse(f"${gold}$"), parse(span))
 
-    def math_r(completions, answer, **kwargs):
+    def math_r(completions, answer, mode, log_metric=None, **kwargs):
+        if not (len(completions) == len(answer) == len(mode)):
+            raise RuntimeError(
+                f"reward columns misaligned: {len(completions)} completions, {len(answer)} answers, {len(mode)} modes"
+            )
         binary, lengths = [], []
-        for c, a in zip(completions, answer):
+        think_n = think_tok = nothink_n = nothink_tok = nothink_tagged = 0
+        for c, a, m in zip(completions, answer, mode):
             text = c if isinstance(c, str) else c[-1]["content"]
-            n_think = len(tok(think_body(text), add_special_tokens=False).input_ids)
-            binary.append(closed_verify(text, a, verify_span, n_think))
-            lengths.append(len(tok(text, add_special_tokens=False).input_ids))
+            n = len(tok(text, add_special_tokens=False).input_ids)
+            lengths.append(n)
+            if m == "think":
+                body = len(tok(think_body(text), add_special_tokens=False).input_ids)
+                binary.append(closed_verify(text, a, verify_span, body))
+                think_n += 1
+                think_tok += n
+            else:
+                binary.append(nothink_verify(text, a, verify_span))
+                nothink_n += 1
+                nothink_tok += n
+                nothink_tagged += "<think>" in text or "</think>" in text
         shaped = []
         for i in range(0, len(binary), G):
             shaped.extend(shape_group(binary[i : i + G], lengths[i : i + G], MAX_NEW))
+        if think_n:
+            mean_len = think_tok / think_n
+            print(f"think length {mean_len:.1f}", flush=True)
+            if log_metric is not None:
+                log_metric("think/length", mean_len)
+        if nothink_n:
+            mean_len = nothink_tok / nothink_n
+            tagged = nothink_tagged / nothink_n
+            print(f"nothink length {mean_len:.1f} tagged {tagged:.2f}", flush=True)
+            if log_metric is not None:
+                log_metric("nothink/length", mean_len)
+                log_metric("nothink/tagged", tagged)
         return shaped
 
     wandb.finish()
     args = GRPOConfig(
-        output_dir=OUT, run_name="s2-gspo-acc-1000",
+        output_dir=OUT, run_name="s2-gspo-nothink-200",
         max_steps=MAX_STEPS, per_device_train_batch_size=G, num_generations=G,
         max_completion_length=MAX_NEW, learning_rate=1e-6,
         weight_decay=0.1, adam_beta1=0.9, adam_beta2=0.98, max_grad_norm=1.0,
@@ -69,7 +96,7 @@ def main():
         importance_sampling_level="sequence", loss_type="grpo", beta=0.0,
         use_vllm=True, vllm_mode="colocate", vllm_gpu_memory_utilization=0.3,
         temperature=1.0, top_p=0.95, top_k=20,
-        logging_steps=1, save_strategy="steps", save_steps=500, save_total_limit=2,
+        logging_steps=1, save_strategy="steps", save_steps=100, save_total_limit=2,
         save_only_model=True,
         report_to="wandb", remove_unused_columns=False, seed=0,
         mask_truncated_completions=True,
@@ -87,7 +114,7 @@ def main():
     json.dump(trainer.state.log_history, open(log_path, "w"))
     print("wrote", log_path)
     ckpt = f"{OUT}/checkpoint-{MAX_STEPS}"
-    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-acc-1000.jsonl")
+    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-nothink-200.jsonl")
 
 
 if __name__ == "__main__":

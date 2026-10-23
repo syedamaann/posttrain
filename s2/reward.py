@@ -1,4 +1,8 @@
-"""Outcome reward for S2: closed think, a real body, boxed answer, then anti-rumination."""
+"""Outcome reward for S2.
+
+Think prompts pay a closed think, a real body, a boxed answer, then the anti-rumination decay.
+No-think prompts pay only a single boxed answer with no think tag.
+"""
 
 DAPO_HI = 0.8
 MIN_THINK = 128
@@ -17,6 +21,16 @@ def think_body(text):
     if "</think>" not in text:
         return text
     return text.rsplit("</think>", 1)[0]
+
+
+def nothink_verify(text, gold, verify):
+    """1 only when the completion has no think tag and the boxed answer verifies."""
+    if "<think>" in text or "</think>" in text or "\\boxed{" not in text:
+        return 0.0
+    try:
+        return float(verify(gold, text))
+    except Exception:
+        return 0.0
 
 
 def closed_verify(text, gold, verify, think_tokens):
