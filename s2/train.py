@@ -16,12 +16,12 @@ from trl import GRPOConfig, GRPOTrainer
 sys.path.insert(0, str(Path(__file__).parent))
 from reward import closed_verify, nothink_verify, shape_group, think_body
 
-START = "/workspace/s2-gspo-acc-1000/checkpoint-1000"
+START = "/workspace/s2-gspo-nothink-200/checkpoint-100"
 SUFFIX = "\nPlease reason step by step, and put your final answer within \\boxed{}."
 G = 8
 MAX_NEW = 1024
-MAX_STEPS = 200
-OUT = "/workspace/s2-gspo-nothink-200"
+MAX_STEPS = 100
+OUT = "/workspace/s2-gspo-nothink-cont"
 
 
 def gsm8k_gold(ex):
@@ -88,7 +88,7 @@ def main():
 
     wandb.finish()
     args = GRPOConfig(
-        output_dir=OUT, run_name="s2-gspo-nothink-200",
+        output_dir=OUT, run_name="s2-gspo-nothink-cont",
         max_steps=MAX_STEPS, per_device_train_batch_size=G, num_generations=G,
         max_completion_length=MAX_NEW, learning_rate=1e-6,
         weight_decay=0.1, adam_beta1=0.9, adam_beta2=0.98, max_grad_norm=1.0,
@@ -114,7 +114,7 @@ def main():
     json.dump(trainer.state.log_history, open(log_path, "w"))
     print("wrote", log_path)
     ckpt = f"{OUT}/checkpoint-{MAX_STEPS}"
-    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-nothink-200.jsonl")
+    print("eval: python /workspace/posttrain/s1/eval.py --model", ckpt, "--out /workspace/posttrain/s2/results-nothink-cont.jsonl")
 
 
 if __name__ == "__main__":
