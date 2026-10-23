@@ -25,6 +25,7 @@ __pycache__/
 
 # local paper dump (read from arxiv)
 *.pdf
+!papers/rufus-air.pdf
 
 # os / notebooks
 .DS_Store
