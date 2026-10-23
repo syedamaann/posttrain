@@ -19,14 +19,18 @@ Reasoning RL stage (S2) of a small-scale replica of [*Rufus-Air*](https://arxiv.
 
 ![No-think prompt. The accuracy checkpoint writes the answer, emits another </think>, and writes the answer again. This repo stops after the first answer.](protocol.png)
 
-GSPO on GSM8K train, KL coefficient 0. Think prompts pay a closed think of at least 128 tokens, a boxed answer that passes Math-Verify, then a decay in the last 256 tokens before the 1024 cap. A short continuation mixes no-think prompts and pays those only for one boxed answer with no think tag.
+These weights are **1400** GSPO steps after S1, one GSM8K-train prompt per step, 8 completions each. KL coefficient 0. AdamW at 1e-6. The completion cap is 1024.
 
-| | |
-|---|---|
-| Start | S1 @300 |
-| Recipe | GSPO, group 8, KL = 0, AdamW 1e-6 |
-| Think reward | closed, ≥128 think tokens, `\boxed{}`, Math-Verify, DAPO (0, 0.8] |
-| This repo | after the no-think mix. The accuracy-only checkpoint is not this repo. |
+| steps | from | what changed |
+|---:|---|---|
+| 200 | S1 @300 | New think reward. Format held. GSM8K think accuracy 77%, so the 78% bar was missed. |
+| 1000 | that checkpoint | Same reward. GSM8K think 85%, closed 98%, 618 tokens. MATH-500 think truncation 13%. No-think answers grew a second `</think>` on 24% of GSM8K and 16% of MATH-500. |
+| 100 | that checkpoint | Half the prompts are no-think. Those pay 1 only for one boxed answer with no think tag. |
+| 100 | the step above | Same mix, new optimizer. **This repo.** |
+
+The think reward pays a closed think of at least 128 tokens, a boxed answer that passes Math-Verify, and then decays across the last 256 tokens before the cap. A group is kept only when its mean score is in (0, 0.8].
+
+An earlier reward, which paid the shortest correct trace even when `</think>` was missing, collapsed the think tag inside 200 steps. Those weights are not in this lineage. The 1000-step accuracy checkpoint is not this repo either.
 
 ## Use
 
