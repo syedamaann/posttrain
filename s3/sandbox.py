@@ -41,9 +41,9 @@ insurance against a future refactor silently disabling assertions; it does
 source for that family. Layered, not airtight.
 
 Defence model: the pod is disposable and holds nothing of value. These limits
-stop accidents and cheap exploits, not a determined attacker. The isolation-
-correct path is a Modal Sandbox with block_network=True; this module and that
-one are interchangeable behind `run_tests`.
+stop accidents and cheap exploits, not a determined attacker. Training and
+baseline eval call `modal_sandbox.run_tests` instead. This local runner stays
+so the reward unit tests can execute code without a Modal account.
 """
 
 from __future__ import annotations
@@ -164,6 +164,38 @@ class ExecResult:
         return 1.0 if self.outcome == "pass" else 0.0
 
 
+def interpret_report(
+    raw: str | None,
+    n_tests: int,
+    *,
+    stdout: str = "",
+    stderr: str = "",
+    missing: bool = False,
+    killed: bool = False,
+) -> ExecResult:
+    """Turn a grader report into pass, fail, or abort. Shared by both runners."""
+    common = dict(stdout=(stdout or "")[-OUTPUT_CAP:], stderr=(stderr or "")[-OUTPUT_CAP:])
+    if missing or raw is None:
+        reason = "killed" if killed else "no_report"
+        return ExecResult("fail", n_total=n_tests, reason=reason, **common)
+    try:
+        report = json.loads(raw)
+        results = list(report["results"])
+        status = report["status"]
+    except (ValueError, KeyError, TypeError):
+        return ExecResult("abort", reason="bad_report", **common)
+    if status != "ok":
+        return ExecResult("fail", n_total=n_tests, reason=f"load_error:{status}", **common)
+    if len(results) != n_tests + 1:
+        return ExecResult("abort", reason="length_mismatch", **common)
+    *real, canary_passed = results
+    if canary_passed:
+        return ExecResult("fail", n_total=n_tests, reason="canary_broken", **common)
+    n_passed = sum(real)
+    outcome = "pass" if n_passed == len(real) else "fail"
+    return ExecResult(outcome, n_passed=n_passed, n_total=len(real), per_test=real, **common)
+
+
 def run_tests(
     code: str,
     tests: list[str],
@@ -223,46 +255,20 @@ def run_tests(
             # We could not even start the child. That is ours, not the policy's.
             return ExecResult("abort", reason=f"spawn_error:{type(exc).__name__}")
 
-        out = (proc.stdout or "")[-OUTPUT_CAP:]
-        err = (proc.stderr or "")[-OUTPUT_CAP:]
-        common = dict(stdout=out, stderr=err)
-
         if not os.path.exists(report_path):
             # The grader never reported. Either the candidate killed the
             # interpreter (os._exit, SIGKILL from RLIMIT_CPU, segfault in a C
             # extension) or it exhausted memory. All of those are failures.
-            reason = "killed" if proc.returncode and proc.returncode < 0 else "no_report"
-            return ExecResult("fail", n_total=len(tests), reason=reason, **common)
-
+            killed = bool(proc.returncode and proc.returncode < 0)
+            return interpret_report(
+                None, len(tests), stdout=proc.stdout or "", stderr=proc.stderr or "", missing=True, killed=killed,
+            )
         try:
             with open(report_path) as fh:
-                report = json.load(fh)
-            results = list(report["results"])
-            status = report["status"]
-        except (ValueError, KeyError, TypeError, OSError):
-            return ExecResult("abort", reason="bad_report", **common)
-
-        if status != "ok":
-            # Candidate blew up at definition time: syntax error, bad import,
-            # or sys.exit() at module level.
-            return ExecResult(
-                "fail", n_total=len(tests), reason=f"load_error:{status}", **common
-            )
-
-        if len(results) != len(payload):
-            return ExecResult("abort", reason="length_mismatch", **common)
-
-        *real, canary_passed = results
-        if canary_passed:
-            return ExecResult(
-                "fail", n_total=len(tests), reason="canary_broken", **common
-            )
-
-        n_passed = sum(real)
-        outcome = "pass" if n_passed == len(real) else "fail"
-        return ExecResult(
-            outcome, n_passed=n_passed, n_total=len(real), per_test=real, **common
-        )
+                raw = fh.read()
+        except OSError:
+            return ExecResult("abort", reason="bad_report", stdout=(proc.stdout or "")[-OUTPUT_CAP:], stderr=(proc.stderr or "")[-OUTPUT_CAP:])
+        return interpret_report(raw, len(tests), stdout=proc.stdout or "", stderr=proc.stderr or "")
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
         shutil.rmtree(outdir, ignore_errors=True)
