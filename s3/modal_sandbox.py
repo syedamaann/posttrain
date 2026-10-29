@@ -17,6 +17,7 @@ from sandbox import (
     MAX_FILE_BYTES,
     MAX_PROCS,
     RUNNER,
+    WALL_SECONDS,
     ExecResult,
     interpret_report,
 )
@@ -31,7 +32,7 @@ def run_tests(
     tests: list[str],
     *,
     cpu_seconds: int = CPU_SECONDS,
-    wall_seconds: int = 30,
+    wall_seconds: int = WALL_SECONDS,
     cpu: float = 1.0,
     memory: int = 2048,
     app_name: str = APP_NAME,
