@@ -29,4 +29,3 @@ __pycache__/
 
 # os / notebooks
 .DS_Store
-*.ipynb
