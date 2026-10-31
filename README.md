@@ -14,26 +14,38 @@ S2 against S1: GSM8K think accuracy **78% → 83%**, MATH-500 think truncation *
 
 ## How the rest proceeds
 
-A proposed map, not a settled plan. S1–S3 are what this repo has done. Later rows are the paper's next stages and a guess at the one new tool worth learning there. The guess is checked at the start of that stage.
+A proposed map, not a settled plan. S1–S3 describe what this repo has used. S4–S8 are suggestions. The specific tools get checked again at the start of each stage.
 
-Two rules. One new major tool per stage, so a break has a suspect. Stay on TRL until a stage needs something TRL does not fit. Each stage also answers one inference question. A later stage rescores the frozen math eval above.
+Two rules. One new major tool per stage, so a break has a suspect. Stay on TRL until a stage needs something TRL does not fit. A later stage rescores the frozen math eval above.
 
-| Stage | What the paper trains | Small-scale version | Status |
-|---|---|---|---|
-| S1 SFT | 9.01M samples, six categories | `rufus-s1-sft-data-v2`, checkpoint-300 | done |
-| S2 Reasoning RL | verifiable math reward | GSM8K, 1,400 GSPO steps | done |
-| S3 Coding RL (§3.3) | execute the program | 200 assert problems, sandbox reward | underway, no training steps |
-| S4 Instruction-following RL (§3.4) | a rubric the whole response must pass | constraints a Python check can score, before any judge | not started |
-| S5 General Agent (§3.5) | MCP tools, then a check of the environment's state | a few small tool environments | not started |
-| S6 Coding Agent (§3.6) | multi-turn shell tasks in a VM that keeps its files and processes | small terminal tasks | not started |
-| S7 Search Agent (§3.7) | search, then an LLM judge | a bounded corpus before the open web | not started |
-| S8 RLHF | a learned reward on open-ended answers | a small open reward model, beside a non-RL baseline | not started |
+| Stage | What the paper trains | Small-scale version | New tool to learn | Status |
+|---|---|---|---|---|
+| S1 SFT | 9.01M samples, six categories | `rufus-s1-sft-data-v2`, checkpoint-300 | TRL SFT, chat templates, loss masking, Hub model cards | done |
+| S2 Reasoning RL | GSPO, Math-Verify, length penalty | GSM8K, 1,400 steps, groups kept in (0, 0.8] | TRL GRPO/GSPO, vLLM colocate, Math-Verify, W&B on CoreWeave Forge, the frozen eval | done |
+| S3 Coding RL (§3.3) | execute the tests, binary reward, about 29k problems | 200 EvolveCoder assert problems | sandboxed execution, Modal (Sandbox, Function, Secret, Image), Hub branches, paired comparison | underway, no training steps |
+| S4 Instruction-following RL (§3.4) | rubric reward, Python checks plus an LLM judge, every check must pass | Python-checkable constraints first, judge rubrics second | vLLM as a separate OpenAI-compatible server (TRL server mode), LLM-as-judge, lm-evaluation-harness for IFEval/IFBench | not started |
+| S5 General Agent (§3.5) | multi-turn MCP tool use (AgentWorldModel), binary check of environment state | a few small MCP tool environments | framework switch to prime-rl + verifiers, or SkyRL; MCP; multi-turn rollouts; token-in/token-out; tool-call parsing; publish an environment | not started |
+| S6 Coding Agent (§3.6) | terminal tasks in Firecracker VMs, with aborted runs tagged | small terminal tasks, not SWE-bench | Harbor task format, a sandbox that keeps state across turns (Modal or E2B), images built ahead of time, infra-failure tagging | not started |
+| S7 Search Agent (§3.7) | web search and page extraction, LLM-judge reward, Dr. GRPO, a small KL anchor | local retrieval over a bounded corpus, not a paid search API | retrieval (BM25 or a dense index), judge-reward noise, mean-only advantages, SGLang for multi-turn caching | not started |
+| S8 RLHF | on-policy GRPO against an open reward model, length penalty | a small open reward model | reward models, overoptimization and reward hacking, DPO as a comparison, a judged eval | not started |
+| Capstone | | one notebook, `RETRAIN = False`, loads every published checkpoint | that notebook, a Hub Collection, the essay, the video | not started |
 
-S3's new tool is sandboxed execution, Modal included. Intermediate checkpoints go to Hub branches so eval can leave the training machine. A separate serving process, a second training framework, a stateful VM, a retriever, and a reward model belong to S4–S8. Those libraries stay unnamed until the stage starts.
+The S3 Function is a tool to learn. Whether eval runs actually move onto a Modal Function is still open. prime-rl, SkyRL, Harbor, E2B, and SGLang are the candidates named for later stages, not choices already made.
 
-Inference, one question per stage: sampling and special tokens, batched generation and the trainer/generator memory split, whether generation or execution is the slow part, then serving, chat-template fidelity, the cost of a long context, reuse of a multi-turn cache, and a latency and throughput measurement of the shipped model.
+Inference, one topic per stage:
 
-S5–S7 are where a 1.7B copy gets hard. A rollout is many tool calls, and the paper's agent exams may not move. Each of those stages needs a smaller exam it can actually change, and its own budget. The finish is one notebook that loads the published checkpoints, a Hub collection, and a written account of the choices.
+| Stage | Inference topic |
+|---|---|
+| S1 | `generate()`, sampling parameters, special tokens |
+| S2 | vLLM batching, the colocate memory split, throughput |
+| S3 | generation cost against execution cost |
+| S4 | serving with vLLM, prefix caching, request batching |
+| S5 | chat-template fidelity, retokenization drift |
+| S6 | long contexts, KV-cache budgets |
+| S7 | SGLang's prefix cache for multi-turn reuse, against vLLM |
+| S8 and the capstone | quantization, speculative decoding, a latency and throughput measurement of the shipped model |
+
+S5–S7 are where shrinking the paper gets hard. A rollout is many tool calls, and a 1.7B model may barely move the paper's agent exams (tau2-bench, Terminal-Bench, BrowseComp). Each of those stages needs a smaller exam it can actually change, chosen the way S3's holdout is chosen, and its own budget. The paper budgets the agent stages separately rather than by an average. When a stage starts, recheck the small reward models available then, whether prime-rl or SkyRL is comfortable on one GPU, and the current Harbor and Modal APIs.
 
 ```
 papers/rufus-air.pdf paper
